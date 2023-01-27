@@ -86,6 +86,9 @@ EOF
 # output debug and intermediate files, set to 0 in final distribution
 my $debug=0; 
 
+# Detect Windows
+my $osname = $^O;
+my $isWin = $osname eq 'MSWin32';
 
 # Option names
 my ($version,$help,$fast,$showconfig,$so,$postscript,$pdf,$onlychanges,$flatten,$force,$dir,$cvs,$rcs,$svn,$git,$hg,
@@ -108,9 +111,12 @@ my (%CFG)=(
    LATEX     => "latex",
    LATEXDIFF => "latexdiff",
    DVI2      => "dvips",
-   BIBTEX    => "bibtex"
+   BIBTEX    => "bibtex",
+   MKIDX     => "makeindex",
+   PWD       => $isWin ? "cd" : "pwd",
+   WHICH     => $isWin ? "where" : "which",
+   MV        => $isWin ? "move" : "mv"
    );
-
 
 
 Getopt::Long::Configure('pass_through','bundling');
@@ -489,11 +495,15 @@ while ( $infile=$file2=shift @files ) {
 
   # Remaining options are passed to latexdiff
   if (scalar(@ldoptions) > 0 ) {
-    $options = "\'" . join("\' \'",@ldoptions) . "\'";
+    if ($isWin) {
+      $options = join(" ", map { (rindex $_, "-", 0) eq 0 ? $_ :  "\"" . $_ . "\"" } @ldoptions);
+    } else {
+      $options = "\'" . join("\' \'",@ldoptions) . "\'";
+    }
   } else {
     $options = "";
   }
-   
+
   if ( -e $diff && ! $force ) {
     print STDERR "OK to overwrite existing file $diff (y/n)? ";
     $answer = <STDIN> ;
@@ -517,8 +527,8 @@ while ( $infile=$file2=shift @files ) {
 }
 
 foreach $diff ( @difffiles ) {
-  chomp($cwd=(`pwd`));
-  if  (defined($dir)) {
+  chomp($cwd=(`$CFG{PWD}`));
+  if (defined($dir)) {
     ( $diff =~ s/$dir\/?// ) ;
     chdir $dir ; 
   }
@@ -527,26 +537,27 @@ foreach $diff ( @difffiles ) {
 
   # adapt magically changebar styles to [pdftex] display driver if pdf output was selected
   if ( $pdf ) {
-    system("sed \"s/Package\\[dvips\\]/Package[pdftex]/\" \"$diff\" > \"$diff.tmp$$\" ; \\mv \"$diff.tmp$$\" \"$diff\"");
+    system("sed \"s/Package\\[dvips\\]/Package[pdftex]/\" \"$diff\" > \"$diff.tmp$$\"");
+    system("$CFG{MV} \"$diff.tmp$$\" \"$diff\"");
   }
 
   if ( $run ) {
     print STDERR "PDF: $pdf Postscript: $postscript cwd $cwd\n" if $debug;
 
-    if ( system("grep -q \'^[^%]*\\\\bibliography{\' \"$diff\"") == 0 ) { 
-      system("$CFG{LATEX} --interaction=batchmode \"$diff\"; $CFG{BIBTEX} \"$diffbase\";");
+    if ( $diff =~ /^[^%]*\\\\bibliography{/ ) {
+      system("$CFG{LATEX} --interaction=batchmode \"$diff\"; $CFG{BIBTEX} \"$diffbase\"");
       push @ptmpfiles, "$diffbase.bbl","$diffbase.bbl" ; 
     }
 
     # if special needs, as CHANGEBAR
     if ( $extracomp ) {
       # print "Extracomp\n";
-      system("$CFG{LATEX} --interaction=batchmode \"$diff\";");
+      system("$CFG{LATEX} --interaction=batchmode \"$diff\"");
     }
 
     # final compilation
-    system("$CFG{LATEX} --interaction=batchmode \"$diff\";"); # needed if cross-refs
-    system("$CFG{LATEX} \"$diff\";"); # final, with possible error messages
+    system("$CFG{LATEX} --interaction=batchmode \"$diff\""); # needed if cross-refs
+    system("$CFG{LATEX} \"$diff\""); # final, with possible error messages
 
     if ( $rundvi2 ) {
       my $dvi="$diffbase.dvi";
@@ -554,7 +565,8 @@ foreach $diff ( @difffiles ) {
       my $ppoption="";
       
       if ( $onlychanges ) {
-	$ppoption="-pp ".join(",",findchangedpages("$diffbase.aux"));
+        $ppoption="-pp ".join(",",findchangedpages("$diffbase.aux"));
+        print STDERR "ppoption: $ppoption\n" if $debug;
       }
       #system("$CFG{DVI2} $ppoption -o $ps $dvi");
       system("$CFG{DVI2} $ppoption $dvi");
@@ -562,12 +574,12 @@ foreach $diff ( @difffiles ) {
       #print STDERR "Generated postscript file $ps\n";
     } elsif ( $run ) {
       if ( $onlychanges ) {
-	my @pages=compresspages(findchangedpages("$diffbase.aux"));
-        my $gs = `which gs`;
+        my @pages=compresspages(findchangedpages("$diffbase.aux"));
+        my $gs = `$CFG{WHICH} gs`;
         $gs =~ s/^\s+|\s+$//g;
-        my $qpdf = `which qpdf`;
+        my $qpdf = `$CFG{WHICH} qpdf`;
         $qpdf =~ s/^\s+|\s+$//g;
-        my $pdftk = `which pdftk`;
+        my $pdftk = `$CFG{WHICH} pdftk`;
         $pdftk =~ s/^\s+|\s+$//g;
         my $command;
         if (-x $gs && `$gs --version` >= 9.20) {
