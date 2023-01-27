@@ -92,7 +92,7 @@ my $isWin = $osname eq 'MSWin32';
 
 # Option names
 my ($version,$help,$fast,$showconfig,$so,$postscript,$pdf,$onlychanges,$flatten,$force,$dir,$cvs,$rcs,$svn,$git,$hg,
-    $run,$rundvi2,$diffcmd,$patchcmd,@revs,@configlist);
+    $run,$rundvi2,$diffcmd,$patchcmd,@revs,@configlist,$preamble);
 # for passing through config options to latexdiff:
 my ($configlatexdiff,@config,$config,$assign);
 
@@ -128,20 +128,21 @@ GetOptions('revision|r:s' => \@revs,
            'git' => \$git,
            'hg' => \$hg,
            'dir|d:s' => \$dir,
-	   'run' => \$run,
-	   'dvi' => \$rundvi2,
-	   'fast' => \$fast,
-	   'so' => \$so,
+           'preamble|p:s' => \$preamble,
+           'run' => \$run,
+           'dvi' => \$rundvi2,
+           'fast' => \$fast,
+           'so' => \$so,
            'postscript|ps' => \$postscript,
            'pdf' => \$pdf,
            'force' => \$force,
-	   'only-changes' => \$onlychanges,
-	   'flatten:s' => \$flatten,
-	   'config|c=s' => \@configlist,
-	   'show-config' => \$showconfig,
+           'only-changes' => \$onlychanges,
+           'flatten:s' => \$flatten,
+           'config|c=s' => \@configlist,
+           'show-config' => \$showconfig,
            'version' => \$version,
-	   'help|h' => \$help,
-	   'debug!' => \$debug);
+           'help|h' => \$help,
+           'debug!' => \$debug);
 
 ##print STDERR "DEBUG 1:revs($#revs): " . join(":",@revs) . "\n";
 ##print STDERR "DEBUG 1:ARGV($#ARGV): " . join(":",@ARGV) . "\n";
@@ -352,6 +353,10 @@ if ( length $configlatexdiff >0 ) {
 
 if ( defined($flatten) ) {
   push @ldoptions, "--flatten" ;
+}
+
+if ( defined($preamble) ) {
+  push @ldoptions, "-p", $preamble;
 }
 
 if ( defined($debug) && $debug ) {
